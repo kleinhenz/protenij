@@ -182,6 +182,32 @@ def _resolve_model_path(name_or_path: str) -> str:
     return cache_path
 
 
+def _load_skeleton(path: str):
+    """Load a skeleton pickle, tolerating extra attrs from older JAX versions.
+
+    JAX 0.9+ uses __slots__ on ShapeDtypeStruct.  Skeletons saved with older
+    JAX may include attributes (e.g. 'manual_axis_type') that no longer exist.
+    We temporarily patch ShapeDtypeStruct.__setattr__ to silently ignore
+    unknown attributes during loading, then restore it immediately after.
+    """
+    import jax._src.core as _jax_core
+
+    _orig_setattr = _jax_core.ShapeDtypeStruct.__setattr__
+
+    def _lenient_setattr(self, name: str, value) -> None:
+        try:
+            _orig_setattr(self, name, value)
+        except AttributeError:
+            pass  # ignore extra slots from older JAX versions
+
+    _jax_core.ShapeDtypeStruct.__setattr__ = _lenient_setattr  # type: ignore[method-assign]
+    try:
+        with open(path, "rb") as f:
+            return _ProtenixAliasUnpickler(f).load()
+    finally:
+        _jax_core.ShapeDtypeStruct.__setattr__ = _orig_setattr  # type: ignore[method-assign]
+
+
 class _ProtenixAliasUnpickler(pickle.Unpickler):
     """Resolve legacy `protenix.*` class paths to the renamed `protenij.*` package.
 
@@ -209,8 +235,7 @@ def load_model(name_or_path: str):
 
     download_data()
     path = _resolve_model_path(name_or_path)
-    with open(f"{path}.skeleton.pkl", "rb") as f:
-        skeleton = _ProtenixAliasUnpickler(f).load()
+    skeleton = _load_skeleton(f"{path}.skeleton.pkl")
 
     return eqx.tree_deserialise_leaves(f"{path}.eqx", skeleton)
 

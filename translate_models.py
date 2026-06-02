@@ -1,7 +1,6 @@
 """Translate PyTorch checkpoints to Equinox .eqx + .skeleton.pkl files."""
 import os
-CACHE_DIR = os.environ.get("PROTENIJ_CACHE_DIR", os.path.expanduser("~/.protenix"))
-os.environ["PROTENIX_DATA_ROOT_DIR"] = CACHE_DIR
+os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
 
 import time
 import torch
@@ -14,6 +13,8 @@ from protenij.configs.configs_data import data_configs
 from protenij.configs.configs_inference import inference_configs
 from protenij.configs.configs_model_type import model_configs
 from protenij.config import parse_configs
+
+CACHE_DIR = os.path.expanduser("~/.protenix")
 
 MODELS = [
     "protenix_mini_default_v0.5.0",

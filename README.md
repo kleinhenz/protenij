@@ -12,7 +12,7 @@ PyTorch is an **optional** dependency. The full inference pipeline (featurizatio
 uv sync
 
 # With PyTorch (needed for converting checkpoints from the original Protenix format)
-uv sync --extra pytorch-cpu
+uv sync --extra torch
 ```
 
 ## Serialized models
@@ -42,10 +42,10 @@ model = load_model("~/.protenix/protenix_base_default_v1.0.0")
 
 ### Translating from a PyTorch checkpoint
 
-Requires the `pytorch-cpu` extra.
+Requires the `torch` extra.
 
 ```bash
-uv sync --extra pytorch-cpu
+uv sync --extra torch
 python translate_models.py
 ```
 
