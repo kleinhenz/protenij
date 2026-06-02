@@ -9,9 +9,9 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
-from protenix.atom_padding import pad_atom_features
-from protenix.token_padding import pad_token_features, TOKEN_FEATURE_AXES
-from protenix.backend import _HAS_TORCH
+from protenij.atom_padding import pad_atom_features
+from protenij.token_padding import pad_token_features, TOKEN_FEATURE_AXES
+from protenij.backend import _HAS_TORCH
 
 
 def features(n):
@@ -98,7 +98,7 @@ class TokenSchemaTests(unittest.TestCase):
         self.assertEqual(custom["custom"]["pairs"].shape, (3,3,2))
 
     def test_output_comparison_removes_token_axes(self):
-        from protenix.protenij import Outputs, ConfidenceMetrics
+        from protenij.protenij import Outputs, ConfidenceMetrics
         from scripts.atom_padding_diagnostics import comparison_arrays
         mask = jnp.array([True,True,False,False])
         logits = jnp.arange(2*4*4*3).reshape(2,4,4,3)
@@ -119,14 +119,14 @@ class TokenModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         import torch
-        from protenix.backend import from_torch
-        from protenix.protenij import Protenix
-        from protenix.model.modules.embedders import InputFeatureEmbedder, RelativePositionEncoding
-        from protenix.model.modules.transformer import AtomAttentionEncoder
-        from protenix.model.modules.pairformer import MSAModule, PairformerStack, TemplateEmbedder
-        from protenix.model.modules.diffusion import DiffusionModule
-        from protenix.model.modules.confidence import ConfidenceHead
-        from protenix.model.modules.head import DistogramHead
+        from protenij.backend import from_torch
+        from protenij.protenij import Protenix
+        from protenij.model.modules.embedders import InputFeatureEmbedder, RelativePositionEncoding
+        from protenij.model.modules.transformer import AtomAttentionEncoder
+        from protenij.model.modules.pairformer import MSAModule, PairformerStack, TemplateEmbedder
+        from protenij.model.modules.diffusion import DiffusionModule
+        from protenij.model.modules.confidence import ConfidenceHead
+        from protenij.model.modules.head import DistogramHead
         torch.manual_seed(72)
 
         def convert(module):

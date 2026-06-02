@@ -23,13 +23,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from protenix.atom_padding import (
+from protenij.atom_padding import (
     ATOM_FEATURE_AXES,
     pad_atom_features,
 )
-from protenix.token_padding import pad_token_features, token_pair_mask, mask_pair_values
-from protenix.backend import load_model
-from protenix.protenij import Outputs, sample_diffusion
+from protenij.token_padding import pad_token_features, token_pair_mask, mask_pair_values
+from protenij.backend import load_model
+from protenij.protenij import Outputs, sample_diffusion
 from scripts.atom_padding_diagnostics import (
     comparison_arrays, compare_outputs, diagnose, diagnostic_differences,
 )

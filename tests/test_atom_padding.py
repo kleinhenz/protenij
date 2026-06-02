@@ -12,9 +12,9 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
-from protenix.atom_padding import center_atom_coordinates, pad_atom_features
-from protenix.backend import _HAS_TORCH
-from protenix.protenij import (
+from protenij.atom_padding import center_atom_coordinates, pad_atom_features
+from protenij.backend import _HAS_TORCH
+from protenij.protenij import (
     ConfidenceMetrics,
     Outputs,
     ProtenixAttention,
@@ -120,8 +120,8 @@ class AtomPaddingTests(unittest.TestCase):
     @unittest.skipUnless(_HAS_TORCH, "Encoder construction requires the torch extra")
     def test_encoder_padding_samples_sequence_vmap_and_compilation_reuse(self):
         import torch
-        from protenix.backend import from_torch
-        from protenix.model.modules.transformer import AtomAttentionEncoder
+        from protenij.backend import from_torch
+        from protenij.model.modules.transformer import AtomAttentionEncoder
 
         rng = np.random.default_rng(92)
         for has_coords in (False, True):

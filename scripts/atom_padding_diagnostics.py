@@ -4,7 +4,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
 
-from protenix.atom_padding import center_atom_coordinates
+from protenij.atom_padding import center_atom_coordinates
 
 
 def comparison_arrays(output):
