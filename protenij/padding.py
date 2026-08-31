@@ -71,38 +71,46 @@ def pad_features(features: dict, n: int, b: int, a_bucket: int | None = None) ->
     happen to match the token count.
 
     Token-level arrays get K=b-n zero rows appended; pair arrays get K rows
-    and columns; atom arrays are padded to a_bucket atoms (if provided) or to
-    a + ceil(a/n)*K atoms (legacy behaviour).
+    and columns; atom arrays are padded to ``a_bucket`` atoms. When
+    ``a_bucket`` is omitted, the smallest atom bucket that has room for all
+    real atoms plus at least one atom for every padded token is selected.
 
-    A ``token_mask`` key (1s for real tokens, 0s for padding) is added to the
-    returned dict.
+    ``token_mask`` and ``atom_padding_mask`` keys (1s for real entries, 0s for
+    padding) are added to the returned dict. Unlike ``ref_mask``, the latter is
+    strictly padding metadata: a real atom remains 1 even when its reference
+    conformer is unavailable.
 
     Args:
         features: Feature dict as produced by protenix featurization.
         n: Real token count.
         b: Target token bucket size (>= n).
-        a_bucket: Target atom bucket size.  When provided, atom arrays are
-            padded to exactly a_bucket atoms; must satisfy
-            ``a_bucket >= a + (b - n)`` so that each padding token gets at
-            least one atom slot.  When None the legacy ceil(a/n)*K formula
-            is used.
+        a_bucket: Optional target atom bucket override. Atom arrays are padded
+            to exactly this size, which must satisfy
+            ``a_bucket >= a + (b - n)``. When omitted, the target is computed
+            as ``atom_bucket(a + (b - n))``.
 
     Returns:
-        New dict with padded arrays and a ``token_mask`` key.
+        New dict with padded arrays, ``token_mask``, and
+        ``atom_padding_mask`` keys.
     """
-    if n == b and a_bucket is None:
-        return features
+    if n <= 0:
+        raise ValueError(f"n must be positive, got {n}")
+    if b < n:
+        raise ValueError(f"b must be greater than or equal to n, got b={b}, n={n}")
+
     k = b - n
     a = features["ref_pos"].shape[0]  # static during JIT trace
 
-    if a_bucket is not None:
-        assert a_bucket >= a, f"a_bucket ({a_bucket}) must be >= a ({a})"
-        k_atoms = a_bucket - a
-        assert k_atoms >= k, (
-            f"atom bucket too small: {k_atoms} extra atom slots for {k} padding tokens"
-        )
-    else:
-        k_atoms = (-(-a // n)) * k  # ceil(a/n) * k — legacy
+    if a_bucket is None:
+        a_bucket = atom_bucket(a + k)
+    if n == b and a_bucket == a:
+        return features
+
+    assert a_bucket >= a, f"a_bucket ({a_bucket}) must be >= a ({a})"
+    k_atoms = a_bucket - a
+    assert k_atoms >= k, (
+        f"atom bucket too small: {k_atoms} extra atom slots for {k} padding tokens"
+    )
 
     def _pad(arr: jax.Array, axis: int, size: int) -> jax.Array:
         pad_width = [(0, size) if i == axis else (0, 0) for i in range(arr.ndim)]
@@ -129,8 +137,28 @@ def pad_features(features: dict, n: int, b: int, a_bucket: int | None = None) ->
             arr = _pad(arr, axis, size)
         return arr
 
+    def _pad_constraint_leaf(leaf):
+        if not hasattr(leaf, "shape"):
+            return leaf
+        if leaf.ndim < 2 or leaf.shape[:2] != (n, n):
+            raise ValueError(
+                "constraint feature leaves must start with token-pair "
+                f"axes ({n}, {n}); got {leaf.shape}"
+            )
+        return _pad_axes(
+            leaf,
+            (0, 1),
+            k,
+            n,
+            "constraint_feature",
+        )
+
     result: dict = {}
     for key_name, val in features.items():
+        if key_name == "constraint_feature":
+            result[key_name] = jax.tree.map(_pad_constraint_leaf, val)
+            continue
+
         if not hasattr(val, "shape"):
             result[key_name] = val
             continue
@@ -181,6 +209,10 @@ def pad_features(features: dict, n: int, b: int, a_bucket: int | None = None) ->
     result["token_mask"] = jnp.concatenate([
         jnp.ones(n, dtype=jnp.float32),
         jnp.zeros(k, dtype=jnp.float32),
+    ])
+    result["atom_padding_mask"] = jnp.concatenate([
+        jnp.ones(a, dtype=jnp.float32),
+        jnp.zeros(k_atoms, dtype=jnp.float32),
     ])
     return result
 

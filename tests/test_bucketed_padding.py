@@ -149,6 +149,11 @@ def test_multi_row_msa_and_template_padding():
         "restype": rng.standard_normal((n, D)).astype(np.float32),
         # Pair arrays: (n, n, D)
         "rel_pos": rng.standard_normal((n, n, D)).astype(np.float32),
+        # Nested constraint pair arrays must be bucket-stable too.
+        "constraint_feature": {
+            "contact": rng.standard_normal((n, n, 2)).astype(np.float32),
+            "pocket": rng.standard_normal((n, n, 1)).astype(np.float32),
+        },
         # MSA token arrays: (M, n) and (M, n, D)
         "msa": rng.standard_normal((M, n, D)).astype(np.float32),
         "has_deletion": rng.standard_normal((M, n)).astype(np.float32),
@@ -158,7 +163,10 @@ def test_multi_row_msa_and_template_padding():
         "template_pseudo_beta_mask": rng.standard_normal((T, n, n)).astype(np.float32),
         "template_distogram": rng.standard_normal((T, n, n, D)).astype(np.float32),
     }
-    features = {k: jnp.array(v) for k, v in features.items()}
+    features = jax.tree.map(
+        lambda value: jnp.array(value) if isinstance(value, np.ndarray) else value,
+        features,
+    )
 
     padded = pad_features(features, n, b)
 
@@ -168,6 +176,8 @@ def test_multi_row_msa_and_template_padding():
     # Pair arrays → (b, b, ...)
     assert padded["rel_pos"].shape == (b, b, D), \
         f"pair array rel_pos: expected ({b},{b},{D}), got {padded['rel_pos'].shape}"
+    assert padded["constraint_feature"]["contact"].shape == (b, b, 2)
+    assert padded["constraint_feature"]["pocket"].shape == (b, b, 1)
     # MSA token arrays → (M, b, ...) — the key regression check
     assert padded["msa"].shape == (M, b, D), \
         f"MSA array msa: expected ({M},{b},{D}), got {padded['msa'].shape}"
@@ -200,6 +210,53 @@ def test_multi_row_msa_and_template_padding():
         "template_distogram row-padding region is not zero"
     assert np.all(np.array(padded["template_distogram"][:, :, n:, :]) == 0), \
         "template_distogram col-padding region is not zero"
+
+
+def test_atom_padding_mask_is_independent_of_reference_conformer_mask():
+    """A real atom with no reference conformer must not be counted as padding."""
+    n, b, a, a_bucket = 2, 4, 5, 8
+    features = {
+        "ref_pos": jnp.zeros((a, 3), dtype=jnp.float32),
+        "ref_mask": jnp.array([1.0, 0.0, 1.0, 1.0, 1.0], dtype=jnp.float32),
+        "atom_to_token_idx": jnp.array([0, 0, 1, 1, 1], dtype=jnp.int32),
+    }
+
+    padded = pad_features(features, n=n, b=b, a_bucket=a_bucket)
+
+    np.testing.assert_array_equal(
+        np.asarray(padded["atom_padding_mask"]),
+        np.array([1.0] * a + [0.0] * (a_bucket - a), dtype=np.float32),
+    )
+
+
+def test_automatic_atom_bucket_includes_padding_token_slack():
+    """Automatic selection reserves at least one atom per padding token."""
+    n, a = 33, 232
+    b = token_bucket(n)
+
+    padded = pad_features(
+        {"ref_pos": jnp.zeros((a, 3), dtype=jnp.float32)},
+        n=n,
+        b=b,
+    )
+
+    assert padded["ref_pos"].shape == (atom_bucket(a + (b - n)), 3)
+
+
+@pytest.mark.parametrize(
+    ("n", "b", "message"),
+    [
+        (0, 0, "n must be positive"),
+        (3, 2, "b must be greater than or equal to n"),
+    ],
+)
+def test_pad_features_rejects_invalid_token_extents(n, b, message):
+    with pytest.raises(ValueError, match=message):
+        pad_features(
+            {"ref_pos": jnp.zeros((5, 3), dtype=jnp.float32)},
+            n=n,
+            b=b,
+        )
 
 
 def test_msa_depth_equal_token_count_is_not_padded_as_pair():
